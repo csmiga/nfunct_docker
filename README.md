@@ -1,1 +1,1 @@
-# nfunct_docker
+# Non-functional Test Framework

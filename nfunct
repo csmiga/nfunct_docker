@@ -1,0 +1,198 @@
+#!/usr/bin/env bash
+
+# Enable debug mode (-x). Disable debug mode (+x)
+set +
+
+: <<'END'
+Author:      Christopher Smiga
+e-Mail:      csmiga@yahoo.com
+
+Docker:      1.12.5+
+File:        nfunct
+END
+
+# ENVIRONMENT INFORMATION
+# External and common variables must be global
+TAG=$2
+BUILD=$3
+
+REPOSITORY="registry.hub.docker.com/library/csmiga"
+IMAGE=${REPOSITORY}":"${TAG}
+TERM=xterm-256color
+
+# FUNCTIONS
+function build() {
+    # Variables formatted for Dockerfile
+    local FROM_REPOSITORY="registry.hub.docker.com\/library\/debian"
+    local FROM_TAG="10-slim"
+
+    local AUTHOR="Christopher Smiga"
+    local DESCRIPTION="non-Functional Test Controller Image"
+
+    mkdir build
+
+    sed -e "s/%%from_repository%%/${FROM_REPOSITORY}/1; s/%%from_tag%%/${FROM_TAG}/1; \
+        s/%%author%%/${AUTHOR}/g; s/%%tag%%/${TAG}/g; \
+        s/%%build%%/${BUILD}/g; \
+        s/%%description%%/${DESCRIPTION}/g" \
+        files/nfunct.Dockerfile > build/nfunct.Dockerfile
+
+    docker build -t ${IMAGE} -f build/nfunct.Dockerfile .
+
+    # Tidying variable for shell
+    local FROM_REPOSITORY=$(sed 's/\\//g' <<< "$FROM_REPOSITORY")
+    docker rmi ${FROM_REPOSITORY}":"${FROM_TAG}
+
+    rm -rf build
+}
+
+function dev() {
+    local CONTAINER="nfunct-ctrl"
+    local CONTAINER_HOME="/home/nfunct"
+    local HOST="ctrl"
+    local FILE_SYSTEM_REPO="/home/csmiga/Projects/nfunct"
+    
+    docker run -it \
+        --volume ${FILE_SYSTEM_REPO}:${CONTAINER_HOME}/Project \
+        --workdir ${CONTAINER_HOME} \
+        --env TERM=${TERM} \
+        --name ${CONTAINER} ${IMAGE} \
+        /bin/bash
+}
+
+function pull() {
+    docker pull ${IMAGE}
+}
+
+function push() {
+    docker login -u="csmiga" --password-stdin "dco545q7su40uc4t" registry.hub.docker.com
+    docker push ${IMAGE}
+}
+
+function pushFiles() {
+    local STACK_VERSION=${TAG}
+    local STACK_NAME="nfunct-stack"
+    local USERNAME="foo"
+    local PASSWORD="iez0co6Y"
+    local URL="https://github.com/csmiga/stacks"
+
+    curl --connect-timeout 5 --max-time 120 --retry 4 --retry-delay 0 --retry-max-time 3600 --fail http://${USERNAME}:${PASSWORD}@${URL}/${STACK_NAME}/${STACK_VERSION}/ -T files/stack.json
+    curl --connect-timeout 5 --max-time 120 --retry 4 --retry-delay 0 --retry-max-time 3600 --fail http://${USERNAME}:${PASSWORD}@${URL}/${STACK_NAME}/${STACK_VERSION}/ -T files/releasenotes.txt
+    curl --connect-timeout 5 --max-time 120 --retry 4 --retry-delay 0 --retry-max-time 3600 --fail http://${USERNAME}:${PASSWORD}@${URL}/${STACK_NAME}/${STACK_VERSION}/orchestration/pillar/ -T files/images.sls
+}
+
+function startTest() {
+    local HOME='/home/nfunct'
+    local NFUNCT_CLUSTER=False
+
+    mkdir -p ${TEST_DIR}/console-logs
+    mkdir -p ${TEST_DIR}/scripts
+    cp files/${runTest} ${TEST_DIR}/scripts
+
+    # Create nfunct_log directory on host before container launches to provide
+    # user access
+    # Development Environment
+    #docker run --rm -i \
+    docker run -it \
+        --volume ${TEST_DIR}/nfunct_log:${HOME}/.nfunct/log \
+        --volume ${TEST_DIR}/scripts:${HOME}/scripts \
+        --volume ${TEST_DIR}/console-logs:${HOME}/console-logs \
+        --workdir ${HOME} \
+        --env TERM=${TERM} \
+        --name ${CONTAINER} ${IMAGE} \
+        /bin/bash
+}
+
+function status() {
+    local CONTAINER=(${CONTAINER})
+    for ELEMENT in "${CONTAINER[@]}"
+    do
+        echo -n $ELEMENT
+        docker inspect ${ELEMENT} | grep Status | awk -F'"' '{print " -", $4}'
+    done
+}
+
+function stopTest() {
+    echo "Stopping container"
+    docker stop ${CONTAINER01}
+}
+
+function zombies() {
+    local ZOMBIECONTAINERS=$(docker ps --filter name=${CONTAINER}| awk -F' ' '{print $11}')
+    for ITERATE in ${ZOMBIECONTAINERS}
+    do
+        echo "STOPPING: " | tr -d "\n"
+        docker stop ${ITERATE}
+    done
+}
+
+# CASE STATEMENTS
+case "$1" in
+    build)
+        build
+        ;;
+    clean)
+        clean
+        ;;
+    dev)
+        dev
+        ;;
+    help)
+        echo ""
+        echo "HELP:"
+        echo "build - Build docker images locally for development and test"
+        echo "dev - Development environment inside container"
+        echo "help - This help information"
+        echo "pull - Pull docker images from registry server"
+        echo "push - Push docker images to registry server"
+        echo "pushFiles - Push release note, other artifacts to stacks repo"
+        echo "status - Check state of docker container"
+        echo "startTest - Begin test"
+        echo "stopTest - End test"
+        echo "version - Build version for this script and docker images"
+        echo "zombies - Remove zombie containers"
+        echo ""
+        ;;
+    pull)
+        pull
+        ;;
+    push)
+        push
+        ;;
+    pushFiles)
+        pushFiles 
+        ;;
+    startTest)
+        startTest
+        ;;
+    status)
+        status
+        ;;
+    stopTest)
+        stopTest
+        ;;
+    version)
+        echo ${TAG}
+        ;;
+    zombies)
+        zombies
+        ;;
+    *)
+        echo ""
+        echo "Usage:" $0 "{build|dev|help|pull|push|pushFiles|status|startTest|stopTest|version|zombies}"
+        echo ""
+        echo "To build image:"
+        echo "Syntax ./nfunct build <version> <build>"
+        echo "Example: ./nfunct build 19.4.3-1 191103-1621"
+        echo ""
+        echo "Start a test:"
+        echo "Syntax: ./nfunct start"
+        echo ""
+        echo "Browse Docker Images at:"
+        echo "https://cloud.docker.com/repository/registry-1.docker.io/csmiga/images"
+        echo ""
+
+        exit 1
+esac
+
+exit 0
