@@ -1,7 +1,7 @@
-## nfunct (non-Functional Testing)
+## nfunct docker
 [//]: # (<img src="https://th.bing.com/th/id/OIP.iHbPgMP5K4WWaP2RDBD37wHaHa?w=148&h=180&c=7&o=5&pid=1.7" height="60" width="60">)
 
-nfunct is a performance test framework. Using a CI/CD pipeline or other practices, automated performance testing speeds software delivery while maintaining quaility.
+nfunct docker is a performance test framework in a docker container. Using a CI/CD pipeline or other practices, automated performance testing speeds software delivery while maintaining quaility.
 
 *Open Source Software (OSS) = Opportunity*
 
